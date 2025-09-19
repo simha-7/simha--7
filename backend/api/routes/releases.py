@@ -2688,22 +2688,17 @@ def create_complete_release_zip(
                     
                     # Check if we have any transformations to apply
                     if transformations:
-                        # CRITICAL FIX: For original image, ALWAYS use resize-only when resize is present
-                        # This ensures original image is the baseline (resize-only) regardless of other tools selected
-                        resize_transformation = None
-                        for t in transformations:
-                            if t.get('type') == 'resize':
-                                resize_transformation = t
-                                break
+                        # Check if this is resize-only transformation
+                        # Resize-only uses simple coordinate math, complex uses ImageTransformer
+                        is_resize_only = (
+                            len(transformations) == 1 and 
+                            transformations[0].get('type') == 'resize'
+                        )
                         
-                        # Check if this should be treated as resize-only for original image
-                        # FIXED LOGIC: Original image is ALWAYS resize-only when resize is present
-                        is_resize_only_for_original = resize_transformation is not None
-                        
-                        if is_resize_only_for_original:
-                            print(f"🎯 RESIZE-ONLY BASELINE for {img_data.get('filename', 'unknown')} (original image)")
-                            # Use ONLY resize transformation for original image (baseline behavior)
-                            resize_config = resize_transformation['params']
+                        if is_resize_only:
+                            print(f"🎯 RESIZE-ONLY DETECTED for {img_data.get('filename', 'unknown')}")
+                            # Use simple resize (the original working method)
+                            resize_config = transformations[0]['params']
                             target_width = resize_config.get('width')
                             target_height = resize_config.get('height')
                             
@@ -2718,45 +2713,68 @@ def create_complete_release_zip(
                             print(f"🖼️ Resized image dims: {final_dims}")
                             
                             # Track transformations for annotation coordinate transformation
-                            # FIXED: Only track resize transformation for original image (baseline)
-                            resize_only_transformations = [resize_transformation]
+                            # Creates transformation matrix for coordinate conversion
                             transformation_tracking_data = track_transformations_for_annotations(
-                                transformations=resize_only_transformations,
+                                transformations=transformations,
                                 original_dims=original_dims,
                                 final_dims=final_dims
                             )
-                            print(f"🎯 ORIGINAL IMAGE BASELINE: Applied resize-only, other tools will be used for augmented images!")
+                            print(f"🎯 RESIZE-ONLY: Using tracking system for annotations!")
                             
                         else:
                             print(f"🎯 COMPLEX TRANSFORMATIONS for {img_data.get('filename', 'unknown')}")
-                            # Use ImageTransformer for complex transformations (rotation, flip, etc.)
+                            # FIXED: For original image in complex path, apply only resize (baseline behavior)
                             try:
                                 from PIL import Image as PILImage
                                 pil_img = PILImage.open(original_path).convert('RGB')
                                 original_dims = pil_img.size
                                 print(f"🖼️ Original image dims: {original_dims}")
                                 
-                                # Apply transformations using ImageTransformer
-                                # Handles complex geometric operations with proper coordinate tracking
-                                from ..services.image_transformer import ImageTransformer
-                                transformer = ImageTransformer()
-                                print(f"🔄 Calling ImageTransformer.apply_transformations...")
-                                
-                                # Convert transformations list to config dict
-                                config_dict = {}
+                                # CRITICAL FIX: For original image, apply ONLY resize transformation (baseline)
+                                # Find resize transformation in the list
+                                resize_transform = None
                                 for transform in transformations:
-                                    transform_type = transform.get('type')
-                                    transform_params = transform.get('params', {})
-                                    # Add enabled flag
-                                    transform_params['enabled'] = True
-                                    config_dict[transform_type] = transform_params
+                                    if transform.get('type') == 'resize':
+                                        resize_transform = transform
+                                        break
                                 
-                                augmented_image = transformer.apply_transformations(pil_img, config_dict)
-                                print(f"✅ ImageTransformer.apply_transformations completed!")
-                                
-                                # For tracking, we need the transformation list
-                                transformation_list = transformations
-                                final_dims = augmented_image.size if augmented_image else original_dims
+                                if resize_transform:
+                                    print(f"🎯 ORIGINAL IMAGE: Applying ONLY resize (baseline behavior)")
+                                    # Apply only resize to original image
+                                    resize_params = resize_transform.get('params', {})
+                                    target_width = resize_params.get('width')
+                                    target_height = resize_params.get('height')
+                                    
+                                    if target_width and target_height:
+                                        augmented_image = pil_img.resize((target_width, target_height))
+                                        print(f"🖼️ Resized to: {augmented_image.size}")
+                                        
+                                        # Track only resize transformation for original image
+                                        transformation_list = [resize_transform]
+                                        final_dims = augmented_image.size
+                                    else:
+                                        print(f"⚠️ No resize dimensions found, keeping original")
+                                        augmented_image = pil_img.copy()
+                                        transformation_list = []
+                                        final_dims = original_dims
+                                else:
+                                    print(f"🎯 ORIGINAL IMAGE: No resize found, applying all transformations")
+                                    # No resize found, apply all transformations using ImageTransformer
+                                    from ..services.image_transformer import ImageTransformer
+                                    transformer = ImageTransformer()
+                                    
+                                    # Convert transformations list to config dict
+                                    config_dict = {}
+                                    for transform in transformations:
+                                        transform_type = transform.get('type')
+                                        transform_params = transform.get('params', {})
+                                        # Add enabled flag
+                                        transform_params['enabled'] = True
+                                        config_dict[transform_type] = transform_params
+                                    
+                                    augmented_image = transformer.apply_transformations(pil_img, config_dict)
+                                    transformation_list = transformations
+                                    final_dims = augmented_image.size if augmented_image else original_dims
                                 
                                 # Track transformations for annotation coordinate transformation
                                 transformation_tracking_data = track_transformations_for_annotations(
@@ -2764,7 +2782,7 @@ def create_complete_release_zip(
                                     original_dims=original_dims,
                                     final_dims=final_dims
                                 )
-                                print(f"🎯 COMPLEX: Using tracking system for annotations!")
+                                print(f"🎯 ORIGINAL IMAGE BASELINE: Applied resize-only, augmented images will get full combinations!")
                                 
                             except Exception as complex_e:
                                 print(f"🚨 COMPLEX TRANSFORMATION ERROR: {complex_e}")
