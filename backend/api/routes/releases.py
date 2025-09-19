@@ -4733,6 +4733,19 @@ def generate_descriptive_suffix(transformations: dict) -> str:
                 'intensity': intensity,
                 'operation': 'file_suffix_generation'
             })
+        elif tool_type == 'crop':
+            crop_percentage = params.get('crop_percentage', params.get('percentage', 100))
+            logger.debug("operations.operations", f"Processing crop transformation for file suffix", "crop_suffix_processing", {
+                'crop_percentage': crop_percentage,
+                'operation': 'file_suffix_generation'
+            })
+            suffix = f"crop{int(crop_percentage)}"
+            parts.append(suffix)
+            logger.debug("operations.operations", f"Crop suffix added to file naming", "crop_suffix_added", {
+                'suffix': suffix,
+                'crop_percentage': crop_percentage,
+                'operation': 'file_suffix_generation'
+            })
         else:
             # Generic fallback
             logger.debug("operations.operations", f"Using generic fallback for unknown tool type in file suffix", "generic_tool_type_fallback", {
