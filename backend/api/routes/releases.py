@@ -2740,14 +2740,19 @@ def create_complete_release_zip(
                                 
                                 if resize_transform:
                                     print(f"🎯 ORIGINAL IMAGE: Applying ONLY resize (baseline behavior)")
-                                    # Apply only resize to original image
+                                    # Apply only resize to original image using proper resize logic
                                     resize_params = resize_transform.get('params', {})
                                     target_width = resize_params.get('width')
                                     target_height = resize_params.get('height')
                                     
                                     if target_width and target_height:
-                                        augmented_image = pil_img.resize((target_width, target_height))
-                                        print(f"🖼️ Resized to: {augmented_image.size}")
+                                        # 🎯 FIXED: Use proper resize logic that respects resize_mode
+                                        from ..services.image_transformer import ImageTransformer
+                                        transformer = ImageTransformer()
+                                        
+                                        # Apply resize transformation with proper mode handling
+                                        augmented_image = transformer.apply_resize(pil_img, resize_params)
+                                        print(f"🖼️ Resized to: {augmented_image.size} using mode: {resize_params.get('resize_mode', 'stretch_to')}")
                                         
                                         # Track only resize transformation for original image
                                         transformation_list = [resize_transform]
