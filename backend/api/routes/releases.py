@@ -2751,7 +2751,7 @@ def create_complete_release_zip(
                                         transformer = ImageTransformer()
                                         
                                         # Apply resize transformation with proper mode handling
-                                        augmented_image = transformer.apply_resize(pil_img, resize_params)
+                                        augmented_image = transformer._apply_resize(pil_img, resize_params)
                                         print(f"🖼️ Resized to: {augmented_image.size} using mode: {resize_params.get('resize_mode', 'stretch_to')}")
                                         
                                         # Track only resize transformation for original image
