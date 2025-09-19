@@ -119,6 +119,8 @@ class TransformationSchema:
         """
         Generate all possible combinations from single-value transformations
         Phase 1: Uses current single-value system
+        
+        FIXED: Ensures resize-only is always first when resize is enabled (baseline behavior)
         """
         if not self.transformations:
             logger.warning("operations.transformations", "No transformations available for combination generation", "no_transformations_warning", {
@@ -140,7 +142,24 @@ class TransformationSchema:
         # Generate combinations by including/excluding each transformation
         combinations = []
         
-        # Generate all possible combinations (2^n where n is number of transformations)
+        # CRITICAL FIX: Check if resize is enabled - if so, ensure resize-only is FIRST
+        resize_transformation = None
+        for transformation in enabled_transformations:
+            if transformation.tool_type == "resize":
+                resize_transformation = transformation
+                break
+        
+        # If resize is enabled, add resize-only as the FIRST combination (baseline)
+        if resize_transformation:
+            resize_only_combination = {
+                resize_transformation.tool_type: resize_transformation.parameters
+            }
+            combinations.append(resize_only_combination)
+            logger.info("operations.transformations", "Added resize-only as first combination (baseline)", "resize_baseline_added", {
+                'resize_parameters': resize_transformation.parameters
+            })
+        
+        # Generate all other possible combinations (2^n where n is number of transformations)
         for i in range(1, 2 ** len(enabled_transformations)):
             combination = {}
             
@@ -149,11 +168,16 @@ class TransformationSchema:
                 if i & (1 << j):
                     combination[transformation.tool_type] = transformation.parameters
             
+            # Skip resize-only combination if we already added it as first
+            if resize_transformation and combination == {resize_transformation.tool_type: resize_transformation.parameters}:
+                continue
+                
             combinations.append(combination)
         
         logger.info("operations.transformations", f"Generated {len(combinations)} single-value combinations", "single_value_combinations_generated", {
             'combination_count': len(combinations),
-            'enabled_transformations': len(enabled_transformations)
+            'enabled_transformations': len(enabled_transformations),
+            'resize_baseline_first': resize_transformation is not None
         })
         return combinations
     
