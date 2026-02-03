@@ -259,10 +259,10 @@ GAMMA_DESCRIPTION = "Gamma correction value (1.0 = no change)"
 # Resize parameters (ENHANCED: Added unit display)
 RESIZE_WIDTH_MIN = 64
 RESIZE_WIDTH_MAX = 4096
-RESIZE_WIDTH_DEFAULT = 640
+RESIZE_WIDTH_DEFAULT = 200
 RESIZE_HEIGHT_MIN = 64
 RESIZE_HEIGHT_MAX = 4096
-RESIZE_HEIGHT_DEFAULT = 640
+RESIZE_HEIGHT_DEFAULT = 200
 RESIZE_UNIT = "pixels"
 RESIZE_DESCRIPTION = "Image dimensions in pixels"
 
@@ -1032,8 +1032,14 @@ def calculate_max_images_per_original(transformations: list) -> dict:
         })
         
         # Single-value system (no dual-value tools)
-        # If there are any regular tools, we expect one variant plus the original
-        max_images = baseline_original + (1 if regular_count > 0 else 0)
+        # Calculate 2^n combinations for n single-value tools
+        if regular_count > 0:
+            # 2^n possible combinations (including empty combination)
+            # But we exclude empty combination, so 2^n - 1 actual combinations
+            max_combinations = (2 ** regular_count) - 1
+            max_images = baseline_original + max_combinations
+        else:
+            max_images = baseline_original
         
         result = {
             "min": max_images,
